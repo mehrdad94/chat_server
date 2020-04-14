@@ -1,0 +1,6 @@
+export { default as ValidationError } from './validation-error.js'
+export { default as AuthenticationError } from './authentication-error.js'
+export { default as AccessDeniedError } from './access-denied-error.js'
+export { default as RoomDuplicateError } from './room-duplicate-error.js'
+export { default as RoomNotExistError } from './room-not-exist-error.js'
+export { default as UserDuplicateError } from './user-duplicate-error.js'

@@ -1,12 +1,15 @@
 import passport from 'passport'
+import dotenv from 'dotenv'
 import socketioJwt  from "socketio-jwt"
 import passportJwt from 'passport-jwt'
+
+dotenv.config()
 
 const JwtStrategy = passportJwt.Strategy
 const JwtExtractStrategy = passportJwt.ExtractJwt
 
 const JwtStrategyConfig = {
-  secretOrKey: 'secret',
+  secretOrKey: process.env.JWT_KEY,
   algorithms: ['HS256'],
   issuer: 'issuer',
   ignoreExpiration: false,

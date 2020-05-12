@@ -26,8 +26,11 @@ app.use('/api/auth', authController)
 // this middleware should be after routes
 ErrorHandlingMiddleware(app)
 
+const isDevelopment = process.env.NODE_ENV === 'development'
+
 // connect to db
-mongoose.connect('mongodb://127.0.0.1:27017/chat').then(() => {
+const mongoURL = isDevelopment ? process.env.MONGO_URL_DEVELOPMENT : process.env.MONGO_URL_PRODUCTION
+mongoose.connect(mongoURL).then(() => {
   console.log('database connected')
 })
 
@@ -40,42 +43,5 @@ roomsNSP.use(socketAuthMiddleware())
 
 roomsNSP.on('connection', roomController(roomsNSP))
 
-server.listen(3001)
-
-// api details
-// initial info (ROOM_INFO How many people are in this chat, ...)
-// after some one joins (ROOM_JOINED info)
-// after some one leaves (ROOM_LEFT info)
-// is room occupied (ROOM_OCCUPIED)
-
-// io.on('connection', function (socket) {
-//   socket.on('disconnect', function(){
-//     //console.log(io.sockets.adapter.sids[socket.id])
-//     //const clients = await getClients(room)
-//
-//     //io.to(room).emit(ROOM_INFO, roomInfo(clients))
-//   })
-//
-//   socket.on('disconnecting', function(){
-//     console.log(Object.keys(io.sockets.adapter.sids[socket.id]))
-//
-//
-//   })
-//
-//   socket.on('ready', async function ({ room }) {
-//     socket.join(room)
-//
-//     const clients = await getClients(room)
-//
-//     io.to(room).emit(ROOM_INFO, roomInfo(clients))
-//
-//     // console.log(io.sockets.adapter.sids[socket.id])
-//   })
-//
-//   socket.on('signal', function (data) {
-//     console.log(data)
-//     socket.broadcast.to(data.room).emit('signaling_message', data)
-//   })
-// })
-
-//
+const serverPort = isDevelopment ? process.env.PORT : process.env.PORT_PRODUCTION
+server.listen(serverPort)

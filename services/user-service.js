@@ -1,6 +1,9 @@
+import dotenv from 'dotenv'
 import User from '../models/user-model.js'
 import jwt from 'jsonwebtoken'
 import PasswordHash from './password-hash.js'
+
+dotenv.config()
 
 export default class UserService {
   constructor() {
@@ -44,7 +47,7 @@ export default class UserService {
     delete user.password
 
     const payload = { user }
-    return jwt.sign(payload, 'secret', {
+    return jwt.sign(payload, process.env.JWT_KEY, {
       algorithm: 'HS256',
       issuer: 'issuer',
       subject: user._id.toString()

@@ -3,13 +3,16 @@ import asyncWrapper from '../utilities/async-wrapper.js'
 import RoomService from '../services/room-service.js'
 
 import { removeEmptyFromObject } from '../utilities/helpers.js'
-import { socketRoomJoin, socketRoomUserIds, socketGetUser, socketRoomClientsRead } from '../services/socket-service.js'
+import {
+  socketRoomJoin,
+  socketGetSafeUser,
+  socketRoomClientsRead,
+  socketRoomOnlineUsers,
+  socketRoomLeave
+} from '../services/socket-service.js'
 import { RoomDuplicateError, RoomNotExistError } from '../errors/index.js'
 
-// TODO pass user information without password
-// TODO pass online user information on room create
-// TODO create connection greed
-
+// TODO pass online user information on room, create and join
 // helpers
 const runClb = (clb, data) => { if (clb && typeof clb === 'function') clb(data) }
 
@@ -18,7 +21,7 @@ export default namespace => async socket => {
   socket.use(validator('Room', null, true))
 
   // token info
-  const user = socketGetUser(socket)
+  const user = socketGetSafeUser(socket)
   const userId = user._id
 
   // user rooms
@@ -26,29 +29,21 @@ export default namespace => async socket => {
 
   // associate each room to socket room
   userRooms.forEach(room => {
-    socketRoomJoin(socket, room._id)
+    socketRoomJoin(socket, room._id.toString())
 
-    socket.to(room._id).emit('JOINED', user, room._id)
+    socket.to(room._id.toString()).emit('JOINED', user, room._id.toString())
   })
 
   // send information that user needs
   socket.emit('CURRENT_USER', user)
   socket.emit('READ', userRooms)
 
-  const onlineUsers = userRooms.map(room => {
-    return {
-      roomId: room._id,
-      userIds: socketRoomUserIds(namespace, room._id),
-      users: Object.values(socketRoomClientsRead(namespace, room._id)).map(socketGetUser)
-    }
-  })
-
-  socket.emit('ONLINE_USERS', onlineUsers)
+  socket.emit('ONLINE_USERS', userRooms.map(room => socketRoomOnlineUsers(room, namespace)))
 
   // handle on disconnect
   socket.on('disconnect', () => {
     userRooms.forEach(room => {
-      socket.to(room._id).emit('DISCONNECTED', user, room._id)
+      socket.to(room._id.toString()).emit('DISCONNECTED', user, room._id.toString())
     })
   })
 
@@ -64,12 +59,21 @@ export default namespace => async socket => {
       socket.emit('CREATE', result)
 
       socketRoomJoin(socket, result._id)
+
+      socket.emit('ONLINE_USERS', [socketRoomOnlineUsers(result, namespace)])
     } else runClb(clb, new RoomDuplicateError())
   }, true))
 
   socket.on('UPDATE', asyncWrapper(async ({ name, avatar = '', newPublicId, publicId }, clb) => {
     if (await RoomService.findOne(newPublicId)) runClb(clb, new RoomDuplicateError())
     else if (await RoomService.findOne(publicId)) {
+      const roomFromDb = await RoomService.findOne(publicId)
+
+      if (roomFromDb.creator !== userId.toString()) {
+        runClb(clb, new RoomNotExistError())
+        return
+      }
+
       const room = { name, avatar, publicId: newPublicId }
 
       removeEmptyFromObject(room)
@@ -87,11 +91,11 @@ export default namespace => async socket => {
     const room = await RoomService.findOne(publicId)
 
     if (!room) return
-    if (room.creator !== userId) return
+    if (room.creator !== userId.toString()) return
 
     await RoomService.deleteOne(publicId)
 
-    namespace.in(room._id).emit('DELETE', room)
+    namespace.in(room._id.toString()).emit('DELETE', room)
 
     runClb(clb, room)
   }))
@@ -103,8 +107,11 @@ export default namespace => async socket => {
     if (room) {
       socket.emit('CREATE', room)
 
-      socketRoomJoin(socket, room._id)
-      socket.to(room._id).emit('JOINED', user)
+      socketRoomJoin(socket, room._id.toString())
+
+      socket.emit('ONLINE_USERS', [socketRoomOnlineUsers(room, namespace)])
+
+      socket.to(room._id.toString()).emit('JOINED', user, room._id.toString())
 
       runClb(clb, room)
     } else runClb(clb, new RoomNotExistError())
@@ -117,7 +124,7 @@ export default namespace => async socket => {
 
     if (!room || clients.length === 0) return
 
-    const targetSocket = clients.find(client => socketGetUser(client)._id === receiverId)
+    const targetSocket = clients.find(client => socketGetSafeUser(client)._id === receiverId)
 
     if (!targetSocket) return
 
